@@ -200,7 +200,11 @@ class Event(BaseModel, extra="allow"):
         return self.attachments.get(name)
 
     def set_attachment(self, name: str, value: Any) -> None:
-        """Set an attachment value in the attachments map."""
+        """Set an attachment value in the attachments map.
+
+        If ``value`` is a :class:`MemoryRef`, it must reference sensory memory and
+        will not be wrapped again.
+        """
         self.attachments = {**self.attachments, name: value}
 
     @classmethod

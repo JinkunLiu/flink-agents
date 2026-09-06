@@ -81,6 +81,7 @@ public class Event {
      * @param id the existing Event ID
      * @param type the Event type used for routing
      * @param attributes the Event payload
+     * @param attachments key-value data passed between Actions through sensory memory
      * @param upstreamEventId the ID of the direct upstream Event, or {@code null}
      * @param upstreamActionName the name of the emitting Action, or {@code null}
      */
@@ -189,6 +190,12 @@ public class Event {
         return attachments.get(name);
     }
 
+    /**
+     * Sets an attachment on this Event.
+     *
+     * <p>If {@code value} is a {@link MemoryRef}, it must reference sensory memory and will not be
+     * wrapped again.
+     */
     public void setAttachment(String name, Object value) {
         attachments.put(name, value);
     }

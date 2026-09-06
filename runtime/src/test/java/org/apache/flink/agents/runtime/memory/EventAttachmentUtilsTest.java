@@ -171,6 +171,24 @@ class EventAttachmentUtilsTest {
     }
 
     @Test
+    void rejectsMissingEventAttachment() {
+        Event event = new Event("AttachmentStep");
+        event.setAttachment(
+                "payload", MemoryRef.create(MemoryObject.MemoryType.SENSORY, "missing.attachment"));
+
+        IllegalStateException error =
+                assertThrows(
+                        IllegalStateException.class,
+                        () ->
+                                EventAttachmentUtils.loadEventAttachments(
+                                        event, context, eventSerializer));
+
+        assertTrue(
+                error.getMessage()
+                        .startsWith("Event attachment does not exist in sensory memory:"));
+    }
+
+    @Test
     void loadsNullEventAttachment() throws Exception {
         UUID eventId = UUID.randomUUID();
         MemoryRef reference =
