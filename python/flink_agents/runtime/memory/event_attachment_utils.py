@@ -90,12 +90,16 @@ def load_event_attachments(event: Event, ctx: RunnerContext) -> None:
             continue
 
         try:
-            attachment = ctx.sensory_memory.get(value)
+            sensory_memory = ctx.sensory_memory
+            attachment = sensory_memory.get(value)
+            attachment_missing = attachment is None and not sensory_memory.is_exist(
+                value.path
+            )
         except Exception as exc:
             msg = f"Failed to load event attachment: {_attachment_context(event, key, value.path)}"
             raise EventAttachmentError(msg) from exc
 
-        if attachment is None:
+        if attachment_missing:
             msg = (
                 "Event attachment does not exist in sensory memory: "
                 f"{_attachment_context(event, key, value.path)}"

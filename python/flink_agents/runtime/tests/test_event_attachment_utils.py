@@ -130,6 +130,23 @@ def test_load_event_attachments() -> None:
     assert event.get_attachment("payload") == payload
 
 
+def test_load_preserves_none_event_attachment() -> None:
+    sensory_memory = LocalMemoryObject(MemoryType.SENSORY, {})
+    ctx = MockRunnerContext(sensory_memory)
+    event_id = uuid.uuid4()
+    reference = sensory_memory.set(build_attachment_path(event_id, "payload"), None)
+    event = Event.model_construct(
+        id=event_id,
+        type="AttachmentStep",
+        attributes={},
+        attachments={"payload": reference},
+    )
+
+    load_event_attachments(event, ctx)
+
+    assert event.get_attachment("payload") is None
+
+
 def test_load_rejects_missing_event_attachment() -> None:
     sensory_memory = LocalMemoryObject(MemoryType.SENSORY, {})
     ctx = MockRunnerContext(sensory_memory)

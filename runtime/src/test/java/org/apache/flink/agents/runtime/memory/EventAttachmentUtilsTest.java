@@ -44,6 +44,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -167,6 +168,22 @@ class EventAttachmentUtilsTest {
         assertNotSame(event.getAttachments(), actionEvent.getAttachments());
         assertEquals(payload, actionEvent.getAttachment("payload"));
         assertSame(reference, event.getAttachment("payload"));
+    }
+
+    @Test
+    void loadsNullEventAttachment() throws Exception {
+        UUID eventId = UUID.randomUUID();
+        MemoryRef reference =
+                sensoryMemory.set(
+                        EventAttachmentUtils.buildAttachmentPath(eventId, "payload"), null);
+        Map<String, Object> attachments = new HashMap<>();
+        attachments.put("payload", reference);
+        Event event = new Event(eventId, "AttachmentStep", Map.of(), attachments);
+
+        Event actionEvent =
+                EventAttachmentUtils.loadEventAttachments(event, context, eventSerializer);
+
+        assertNull(actionEvent.getAttachment("payload"));
     }
 
     @Test
