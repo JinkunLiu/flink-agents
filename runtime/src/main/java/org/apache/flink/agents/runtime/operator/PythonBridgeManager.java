@@ -58,17 +58,19 @@ import static org.apache.flink.agents.plan.actions.Utils.supportAsync;
  * <ul>
  *   <li>The {@link PythonEnvironmentManager} that prepares dependencies and the Pemja runtime.
  *   <li>The {@link PythonInterpreter} obtained from that environment.
- *   <li>The {@link PythonActionExecutor} (when the plan contains Python actions).
+ *   <li>The {@link PythonActionExecutor} (when the plan contains Python actions or Mem0).
  *   <li>The {@link PythonRunnerContextImpl} consumed by Python actions.
  *   <li>The Java/Python resource adapters that bridge resource lookups across languages.
+ *   <li>The Java wrapper around Python Mem0 long-term memory (when configured).
  * </ul>
  *
  * <p>Lifecycle: instantiated by the operator's {@code open()} (lazy — not in the operator
  * constructor), then immediately initialized via {@link #open} in the same call. {@link #open} is a
- * no-op when the agent plan contains no Python actions and no Python resources — in that case all
- * accessors return {@code null} and {@link #isInitialized()} returns {@code false}. {@link
- * #close()} closes the owned resources in the reverse order of creation: {@code
- * pythonActionExecutor} → {@code pythonInterpreter} → {@code pythonEnvironmentManager}.
+ * no-op when the agent plan contains no Python actions, Python resources, or Mem0 configuration —
+ * in that case all accessors return {@code null} and {@link #isInitialized()} returns {@code
+ * false}. {@link #close()} closes the owned resources in the reverse order of creation: {@code
+ * longTermMemory} → {@code pythonActionExecutor} → {@code pythonResourceAdapter} → {@code
+ * pythonInterpreter} → {@code pythonEnvironmentManager}.
  *
  * <p>Design constraint: package-private; no manager-to-manager held references. Other managers
  * receive what they need (e.g. the Python runner context, the action executor) via method
@@ -191,7 +193,7 @@ class PythonBridgeManager implements AutoCloseable {
                 initPythonActionExecutor(agentPlan, jobIdentifier);
             }
             if (mem0Configured) {
-                wireLongTermMemory(agentPlan);
+                wireLongTermMemory(agentPlan, mailboxThreadChecker);
             }
             initialized = true;
         }
@@ -238,7 +240,7 @@ class PythonBridgeManager implements AutoCloseable {
      * {@code create_flink_runner_context} already initialised via {@code _init_long_term_memory})
      * and wrap it as a Java {@link Mem0LongTermMemory}.
      */
-    private void wireLongTermMemory(AgentPlan agentPlan) {
+    private void wireLongTermMemory(AgentPlan agentPlan, Runnable mailboxThreadChecker) {
         PyObject pyCtx = pythonActionExecutor.getPythonRunnerContext();
         Object pyLtm = pythonInterpreter.invoke("python_java_utils.get_long_term_memory", pyCtx);
         if (pyLtm == null) {
@@ -252,7 +254,9 @@ class PythonBridgeManager implements AutoCloseable {
                             LongTermMemoryOptions.Mem0.EMBEDDING_MODEL_SETUP.getKey(),
                             LongTermMemoryOptions.Mem0.VECTOR_STORE.getKey()));
         }
-        longTermMemory = new Mem0LongTermMemory(pythonResourceAdapter, (PyObject) pyLtm);
+        longTermMemory =
+                new Mem0LongTermMemory(
+                        pythonResourceAdapter, (PyObject) pyLtm, mailboxThreadChecker);
         MemoryEventSettings settings = MemoryEventSettings.from(agentPlan.getConfigData());
         longTermMemory.configureObservation(
                 settings.generate(MemoryEventSettings.MemoryOp.LONG_TERM_UPDATE),
@@ -326,7 +330,11 @@ class PythonBridgeManager implements AutoCloseable {
         Throwable firstFailure = null;
         for (AutoCloseable closeable :
                 new AutoCloseable[] {
-                    pythonActionExecutor, pythonInterpreter, pythonEnvironmentManager
+                    longTermMemory,
+                    pythonActionExecutor,
+                    pythonResourceAdapter,
+                    pythonInterpreter,
+                    pythonEnvironmentManager
                 }) {
             if (closeable == null) {
                 continue;
