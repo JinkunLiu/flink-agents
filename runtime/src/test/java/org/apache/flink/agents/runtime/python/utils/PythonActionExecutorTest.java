@@ -17,6 +17,9 @@
  */
 package org.apache.flink.agents.runtime.python.utils;
 
+import org.apache.flink.agents.api.Event;
+import org.apache.flink.agents.plan.PythonFunction;
+import org.apache.flink.agents.runtime.python.context.PythonRunnerContextImpl;
 import org.apache.flink.types.Row;
 import org.junit.jupiter.api.Test;
 import pemja.core.PythonInterpreter;
@@ -26,11 +29,40 @@ import java.lang.reflect.Field;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class PythonActionExecutorTest {
+
+    @Test
+    void loadsEventAttachmentsBeforeCallingPythonFunction() throws Exception {
+        PythonInterpreter interpreter = mock(PythonInterpreter.class);
+        PythonActionExecutor executor = newExecutor(interpreter);
+        PythonFunction function = mock(PythonFunction.class);
+        PyObject runnerContext = mock(PyObject.class);
+        PyObject pythonEvent = mock(PyObject.class);
+        PyObject eventWithAttachments = mock(PyObject.class);
+        setField(executor, "pythonRunnerContext", runnerContext);
+        when(interpreter.invoke(eq("python_java_utils.convert_json_to_python_event"), anyString()))
+                .thenReturn(pythonEvent);
+        when(interpreter.invoke(
+                        "python_java_utils.load_event_attachments_for_action",
+                        pythonEvent,
+                        runnerContext))
+                .thenReturn(eventWithAttachments);
+
+        executor.executePythonFunction(function, new Event("test-event"));
+
+        verify(interpreter)
+                .invoke(
+                        "python_java_utils.load_event_attachments_for_action",
+                        pythonEvent,
+                        runnerContext);
+        verify(function).call(eventWithAttachments, runnerContext);
+    }
 
     @Test
     void resolvesPickledPythonKeyTextFromPyFlinkKeyRow() throws Exception {
@@ -174,6 +206,7 @@ class PythonActionExecutorTest {
 
     private static PythonActionExecutor newExecutor(PythonInterpreter interpreter)
             throws Exception {
-        return new PythonActionExecutor(interpreter, null, null, null, "test-job");
+        PythonRunnerContextImpl runnerContext = mock(PythonRunnerContextImpl.class);
+        return new PythonActionExecutor(interpreter, null, null, runnerContext, "test-job");
     }
 }
