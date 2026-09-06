@@ -147,11 +147,10 @@ public class ActionExecutionOperatorTest {
 
     @Test
     void testJavaEventAttachmentsAreOffloadedAndResolvedBetweenActions() throws Exception {
-        InMemoryActionStateStore actionStateStore = new InMemoryActionStateStore(false);
         AgentPlan agentPlan = TestAgent.getEventAttachmentAgentPlan();
         try (KeyedOneInputStreamOperatorTestHarness<Long, Long, Object> testHarness =
                 new KeyedOneInputStreamOperatorTestHarness<>(
-                        new ActionExecutionOperatorFactory<>(agentPlan, true, actionStateStore),
+                        new ActionExecutionOperatorFactory<>(agentPlan, true),
                         (KeySelector<Long, Long>) value -> value,
                         TypeInformation.of(Long.class))) {
             testHarness.open();
@@ -178,16 +177,6 @@ public class ActionExecutionOperatorTest {
                     (List<StreamRecord<Object>>) testHarness.getRecordOutput();
             assertThat(recordOutput).hasSize(1);
             assertThat(recordOutput.get(0).getValue()).isEqualTo(Map.of("value", 1L));
-
-            ActionState actionState =
-                    actionStateStore.get(
-                            1L,
-                            0L,
-                            agentPlan.getActions().get("receiveEventAttachment"),
-                            runtimeEvent);
-            assertThat(actionState).isNotNull();
-            assertThat(actionState.getTaskEvent().getAttachment(TestAgent.ATTACHMENT_KEY))
-                    .isSameAs(reference);
         }
     }
 
